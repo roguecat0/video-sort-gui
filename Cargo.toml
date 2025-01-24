@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.95"
 iced = "0.13.1"
 iced_gif = { git = "https://github.com/tarkah/iced_gif.git", version = "0.13.0" }
 iced_video_player = { git = "https://github.com/jazzfool/iced_video_player.git", version = "0.6.0" }
