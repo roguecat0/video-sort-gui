@@ -1,9 +1,9 @@
-use file_handling::build_paths;
 use iced::{
     widget::{button, column, row, text},
     Element,
 };
 use std::collections::HashMap;
+use video_sort_gui::file_handling::{self, build_paths};
 
 fn main() -> iced::Result {
     iced::run("hello", App::update, App::view)
