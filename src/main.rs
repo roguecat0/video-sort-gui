@@ -3,7 +3,7 @@ use iced::{
     widget::{button, column, row, text},
     Element,
 };
-use std::{collections::HashMap, path::Path};
+use std::collections::HashMap;
 
 fn main() -> iced::Result {
     iced::run("hello", App::update, App::view)
