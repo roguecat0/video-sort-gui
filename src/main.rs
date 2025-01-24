@@ -151,17 +151,18 @@ impl Data {
 }
 impl Default for Data {
     fn default() -> Self {
-        Self::new("src").unwrap()
+        Self::new(file_handling::MEDIA).unwrap()
     }
 }
 mod file_handling {
+    use std::ffi::OsStr;
     use std::fs;
     use std::io;
     use std::path::{Path, PathBuf};
 
     const ROOT: &'static str = "src";
     const SORTED: &'static str = "sorted";
-    const MEDIA: &'static str = "src";
+    pub const MEDIA: &'static str = "media";
 
     pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) {
         if indexes.len() == recursive_dirs.len() {
@@ -189,13 +190,20 @@ mod file_handling {
         file_path: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let file_path = PathBuf::from(file_path);
-        let tmp = file_path.file_name().unwrap();
         let mut new_path = PathBuf::from(SORTED);
         new_path.push(PathBuf::from_iter(picked_dirs.iter()));
-        new_path.push(tmp);
+        new_path.push(path_to_filename(&file_path));
         println!("old: {file_path:?}, new: {new_path:?}");
         fs::copy(file_path, new_path)?;
         Ok(())
+    }
+    fn path_to_filename(old_path: &Path) -> String {
+        old_path
+            .iter()
+            .skip(1)
+            .flat_map(|s| s.to_str().map(|ss| ss.to_string()))
+            .reduce(|acc, s| acc + "_" + &s)
+            .unwrap()
     }
 
     pub fn get_file_names_in_dir(path: &str) -> io::Result<Vec<String>> {
