@@ -39,12 +39,10 @@ impl App {
         "Iced webp".into()
     }
 
-    fn update(&mut self, message: Message) -> Task<Message> {
+    fn update(&mut self, message: Message) {
         let Message::Loaded(frames) = message;
 
         self.frames = frames.ok();
-
-        Task::none()
     }
 
     fn view(&self) -> Element<Message> {
