@@ -1,19 +1,30 @@
 use iced::{
-    advanced::graphics::futures::subscription,
     widget::{button, column, row, text},
-    Element, Subscription,
+    Element, Length, Size, Subscription,
 };
+use iced_video_player::VideoPlayer;
 use std::{
     collections::HashMap,
+    path::Path,
     time::{Duration, Instant},
 };
-use video_sort_gui::file_handling::{self, build_paths};
+use video_sort_gui::{
+    file_handling::{self, build_paths},
+    widget::Player,
+};
 
 fn main() -> iced::Result {
-    iced::run("hello", App::update, App::view)
+    iced::application("main", App::update, App::view)
+        .window(iced::window::Settings {
+            size: Size::new(1098.0, 664.0),
+            ..Default::default()
+        })
+        .run()
+    //.run_with(App::default)
 }
+use iced_gif::gif;
+use iced_webp::webp;
 
-#[derive(Clone, Debug)]
 struct App {
     path: String,
     actions: Vec<String>,
@@ -22,6 +33,7 @@ struct App {
     selected_area: Option<usize>,
     data: Data,
     last_tick: Instant,
+    player: Player,
 }
 
 #[derive(Clone, Debug)]
@@ -39,9 +51,12 @@ impl Default for App {
         let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
         build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
         let last_tick = Instant::now();
+        let path = data.next_path().unwrap();
+        let player = Player::from_path(Path::new(&path)).expect("path is not good");
 
         Self {
-            path: data.next_path().unwrap(),
+            player,
+            path,
             selected_action: None,
             selected_area: None,
             last_tick,
@@ -95,6 +110,7 @@ impl App {
 
             if let Some(path) = self.data.next_path() {
                 self.path = path;
+                self.player = Player::from_path(Path::new(&self.path)).expect("path working");
             } else {
                 println!("paths are finished")
             }
@@ -122,6 +138,7 @@ impl App {
         });
 
         let col = column![
+            view_player(&self.player),
             text(format!("current file is: {:?}", self.path,)),
             text(format!(
                 "selected_action: {:?}, selected_area: {:?}",
@@ -146,6 +163,25 @@ impl App {
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![iced::time::every(Duration::from_millis(1000)).map(Message::Tick)];
         iced::Subscription::batch(subscriptions)
+    }
+}
+fn view_player(player: &Player) -> Element<Message> {
+    match player {
+        Player::Idle => text("idle").width(Length::Fill).height(Length::Fill).into(),
+        Player::Gif { frames, .. } => gif(&frames)
+            .height(iced::Length::Fill)
+            .width(iced::Length::Fill)
+            .into(),
+        Player::Webp { frames, .. } => webp(&frames)
+            .height(iced::Length::Fill)
+            .width(iced::Length::Fill)
+            .into(),
+        Player::Video { video, .. } => VideoPlayer::new(video)
+            .width(iced::Length::Shrink)
+            .height(iced::Length::Shrink)
+            .content_fit(iced::ContentFit::Contain)
+            .on_end_of_stream(Message::VideoEnd)
+            .into(),
     }
 }
 #[derive(Debug, Clone)]

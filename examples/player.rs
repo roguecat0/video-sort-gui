@@ -13,11 +13,15 @@ struct App {
 const FILE_GIF: &'static str = r#"C:\Users\tevon\Programming\rust\video-sort-gui\media\demo.gif"#;
 const FILE_WEBP: &'static str = r#"C:\Users\tevon\Programming\rust\video-sort-gui\media\nya.webp"#;
 const FILE_MP4: &'static str = r#"C:\Users\tevon\Programming\rust\video-sort-gui\media\test.mp4"#;
+const REL_FILE_MP4: &'static str = r#"media\test.mp4"#;
 
 impl Default for App {
     fn default() -> Self {
         let last_tick = Instant::now();
-        let player = Player::from_path(Path::new(FILE_MP4)).unwrap();
+        let path = Path::new(REL_FILE_MP4);
+        let path = &path.canonicalize().expect("path can't find root");
+        println!("path: {path:?}");
+        let player = Player::from_path(path).unwrap();
         Self { player, last_tick }
     }
 }

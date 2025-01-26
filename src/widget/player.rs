@@ -92,8 +92,16 @@ impl Player {
                     })
                 }
                 Some("mp4") | Some("webm") => {
+                    let path = if path.is_absolute() {
+                        path.to_path_buf()
+                    } else {
+                        let path = path.canonicalize()?;
+                        println!("making relative: {path:?}");
+                        path
+                    };
+
                     let mut video = Video::new(
-                        &url::Url::from_file_path(path)
+                        &url::Url::from_file_path(&path)
                             .map_err(|_| anyhow!("failed to parse path: {path:?}"))?,
                     )?;
                     video.set_looping(true);
