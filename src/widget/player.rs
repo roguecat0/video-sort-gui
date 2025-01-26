@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Error as AnyError};
+use iced::Task;
 use iced_gif::gif;
 use iced_video_player::{Video, VideoPlayer};
 use iced_webp::webp;
@@ -24,6 +25,11 @@ pub enum Player {
         duration: Duration,
         position: f64,
     },
+}
+impl Clone for Player {
+    fn clone(&self) -> Self {
+        Self::Idle
+    }
 }
 fn try_read_bytes(path: &Path) -> Result<Vec<u8>, AnyError> {
     Ok(std::fs::read(path)?)
@@ -64,6 +70,12 @@ impl Player {
             _ => None,
         }
     }
+    pub fn from_path_async_naive(path: &Path) -> Task<Option<Self>> {
+        let path = path.to_path_buf();
+        let f = async move { Self::from_path(&path).ok() };
+        Task::perform(f, std::convert::identity)
+    }
+
     pub fn from_path(path: &Path) -> Result<Self, AnyError> {
         if let Some(extention) = path.to_path_buf().extension() {
             println!("extention: {extention:?}");

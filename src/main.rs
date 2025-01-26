@@ -1,11 +1,12 @@
 use iced::{
-    widget::{button, column, row, text},
-    Element, Length, Size, Subscription,
+    widget::{button, column, container, row, text},
+    Element, Length, Size, Subscription, Task,
 };
 use iced_video_player::VideoPlayer;
 use std::{
     collections::HashMap,
-    path::Path,
+    fmt::Debug,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use video_sort_gui::{
@@ -19,8 +20,8 @@ fn main() -> iced::Result {
             size: Size::new(1098.0, 664.0),
             ..Default::default()
         })
-        .run()
-    //.run_with(App::default)
+        //.run()
+        .run_with(App::with_taks)
 }
 use iced_gif::gif;
 use iced_webp::webp;
@@ -36,12 +37,18 @@ struct App {
     player: Player,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum Message {
     ActionInput(String),
     AreaInput(String),
     Tick(Instant),
     VideoEnd,
+    Loaded(Option<Player>),
+}
+impl Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("is message enume")
+    }
 }
 
 impl Default for App {
@@ -68,7 +75,31 @@ impl Default for App {
 }
 
 impl App {
-    pub fn update(&mut self, message: Message) {
+    pub fn with_taks() -> (Self, Task<Message>) {
+        let data = Data::default();
+        let actions = vec!["push".into(), "pull".into(), "exit".into()];
+        let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
+        build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
+        let last_tick = Instant::now();
+        let path = data.next_path().unwrap();
+        let path2 = path.clone();
+        //let player = Player::from_path(pPath).expect("path is not good");
+
+        (
+            Self {
+                player: Player::Idle,
+                path,
+                selected_action: None,
+                selected_area: None,
+                last_tick,
+                actions,
+                areas,
+                data,
+            },
+            Player::from_path_async_naive(Path::new(&path2)).map(Message::Loaded),
+        )
+    }
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ActionInput(s) => {
                 self.selected_action = self
@@ -77,7 +108,11 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                self.after_button_press();
+                if let Some(path) = self.after_button_press() {
+                    Player::from_path_async_naive(&path).map(Message::Loaded)
+                } else {
+                    Task::none()
+                }
             }
             Message::AreaInput(s) => {
                 self.selected_area = self
@@ -86,16 +121,28 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                self.after_button_press();
+                if let Some(path) = self.after_button_press() {
+                    Player::from_path_async_naive(&path).map(Message::Loaded)
+                } else {
+                    Task::none()
+                }
             }
             Message::Tick(instant) => {
                 let elapsed = instant - self.last_tick;
                 self.last_tick = instant;
+                Task::none()
             }
-            Message::VideoEnd => {}
+            Message::VideoEnd => Task::none(),
+            Message::Loaded(player) => {
+                match player {
+                    Some(player) => self.player = player,
+                    None => println!("loading failed"),
+                }
+                Task::none()
+            }
         }
     }
-    fn after_button_press(&mut self) {
+    fn after_button_press(&mut self) -> Option<PathBuf> {
         if let (Some(selected_action), Some(selected_area)) = self.all_selected_str() {
             let selected_action = selected_action.to_string();
             let selected_area = selected_area.to_string();
@@ -107,15 +154,17 @@ impl App {
             if let Err(e) = file_handling::copy(&vec![selected_action, selected_area], &self.path) {
                 println!("copy failed: {e}");
             }
-
-            if let Some(path) = self.data.next_path() {
-                self.path = path;
-                self.player = Player::from_path(Path::new(&self.path)).expect("path working");
-            } else {
-                println!("paths are finished")
-            }
-            println!("file_map: {:?}", self.data.file_map);
             self.reset_selected();
+            if let Some(path) = self.data.next_path() {
+                println!("has path!!! ");
+                self.path = path;
+                Some(PathBuf::from(&self.path))
+            } else {
+                println!("paths are finished");
+                None
+            }
+        } else {
+            None
         }
     }
     fn all_selected_str(&self) -> (Option<&str>, Option<&str>) {
@@ -138,7 +187,7 @@ impl App {
         });
 
         let col = column![
-            view_player(&self.player),
+            container(view_player(&self.player)).width(400).height(400),
             text(format!("current file is: {:?}", self.path,)),
             text(format!(
                 "selected_action: {:?}, selected_area: {:?}",
@@ -166,7 +215,7 @@ impl App {
     }
 }
 fn view_player(player: &Player) -> Element<Message> {
-    match player {
+    let vid = match player {
         Player::Idle => text("idle").width(Length::Fill).height(Length::Fill).into(),
         Player::Gif { frames, .. } => gif(&frames)
             .height(iced::Length::Fill)
@@ -177,12 +226,13 @@ fn view_player(player: &Player) -> Element<Message> {
             .width(iced::Length::Fill)
             .into(),
         Player::Video { video, .. } => VideoPlayer::new(video)
-            .width(iced::Length::Shrink)
-            .height(iced::Length::Shrink)
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill)
             .content_fit(iced::ContentFit::Contain)
             .on_end_of_stream(Message::VideoEnd)
             .into(),
-    }
+    };
+    vid
 }
 #[derive(Debug, Clone)]
 struct Data {
