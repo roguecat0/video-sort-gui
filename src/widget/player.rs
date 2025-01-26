@@ -10,9 +10,9 @@ use std::time::Duration;
 
 pub enum Player {
     Idle,
-    Vid {
+    Video {
         video: Video,
-        position: f64,
+        finished: bool,
     },
     Gif {
         frames: gif::Frames,
@@ -31,11 +31,17 @@ fn try_read_bytes(path: &Path) -> Result<Vec<u8>, AnyError> {
 impl Player {
     pub fn tick(&mut self, elapsed: Duration) -> Option<Update> {
         match self {
-            Player::Vid { .. } => None,
+            Player::Video { finished, .. } => {
+                if *finished {
+                    *finished = false;
+                    Some(Update::EndOfStream)
+                } else {
+                    None
+                }
+            }
             Player::Gif {
                 duration, position, ..
             } => {
-                println!("duration: {duration:?}, position: {position:?}");
                 *position += elapsed.as_secs_f64();
                 if *position >= duration.as_secs_f64() {
                     *position = 0_f64;
@@ -48,7 +54,7 @@ impl Player {
                 duration, position, ..
             } => {
                 *position += elapsed.as_secs_f64();
-                if *position == duration.as_secs_f64() {
+                if *position >= duration.as_secs_f64() {
                     *position = 0_f64;
                     Some(Update::EndOfStream)
                 } else {
@@ -58,7 +64,6 @@ impl Player {
             _ => None,
         }
     }
-    //pub fn new() -> Result<Self, AnyError> {}
     pub fn from_path(path: &Path) -> Result<Self, AnyError> {
         if let Some(extention) = path.to_path_buf().extension() {
             println!("extention: {extention:?}");
@@ -67,12 +72,34 @@ impl Player {
                     let bytes = try_read_bytes(path)?;
                     let frames = gif::Frames::from_bytes(bytes.clone())?;
                     let duration = gif::Frames::from_bytes_with_length(bytes)?;
-                    println!("duration: {duration:?}");
                     let position = 0_f64;
                     Ok(Self::Gif {
                         frames,
                         duration,
                         position,
+                    })
+                }
+                Some("webp") => {
+                    let bytes = try_read_bytes(path)?;
+                    let frames = webp::Frames::from_bytes(bytes.clone())?;
+                    let duration = webp::Frames::from_bytes_with_length(bytes)?;
+                    println!("duration: {duration:?}");
+                    let position = 0_f64;
+                    Ok(Self::Webp {
+                        frames,
+                        duration,
+                        position,
+                    })
+                }
+                Some("mp4") | Some("webm") => {
+                    let mut video = Video::new(
+                        &url::Url::from_file_path(path)
+                            .map_err(|_| anyhow!("failed to parse path: {path:?}"))?,
+                    )?;
+                    video.set_looping(true);
+                    Ok(Self::Video {
+                        video,
+                        finished: false,
                     })
                 }
                 None => anyhow::bail!("failed to parse {extention:?}"),

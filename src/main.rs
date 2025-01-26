@@ -29,6 +29,7 @@ enum Message {
     ActionInput(String),
     AreaInput(String),
     Tick(Instant),
+    VideoEnd,
 }
 
 impl Default for App {
@@ -75,6 +76,11 @@ impl App {
             Message::Tick(instant) => {
                 let elapsed = instant - self.last_tick;
                 self.last_tick = instant;
+            }
+            Message::VideoEnd => {
+                if let Player::Video { finished, .. } = &mut self.player {
+                    *finished = true
+                }
             }
         }
     }
