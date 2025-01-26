@@ -1,45 +1,120 @@
-use anyhow::Result;
+use anyhow::{anyhow, Error as AnyError};
 use iced_gif::gif;
 use iced_video_player::{Video, VideoPlayer};
 use iced_webp::webp;
+use image_rs::codecs::gif::GifDecoder;
+use image_rs::codecs::webp::WebPDecoder;
+use image_rs::AnimationDecoder;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub enum Player {
-    Vid { video: Video, position: f64 },
-    Gif { frames: Option<gif::Frames> },
-    Webp { frames: Option<webp::Frames> },
+    Idle,
+    Vid {
+        video: Video,
+        position: f64,
+    },
+    Gif {
+        frames: gif::Frames,
+        duration: Duration,
+        position: f64,
+    },
+    Webp {
+        frames: webp::Frames,
+        duration: Duration,
+        position: f64,
+    },
+}
+fn try_read_bytes(path: &Path) -> Result<Vec<u8>, AnyError> {
+    Ok(std::fs::read(path)?)
+}
+impl Player {
+    pub fn tick(&mut self, elapsed: Duration) -> Option<Update> {
+        match self {
+            Player::Vid { .. } => None,
+            Player::Gif {
+                duration, position, ..
+            } => {
+                println!("duration: {duration:?}, position: {position:?}");
+                *position += elapsed.as_secs_f64();
+                if *position >= duration.as_secs_f64() {
+                    *position = 0_f64;
+                    Some(Update::EndOfStream)
+                } else {
+                    None
+                }
+            }
+            Player::Webp {
+                duration, position, ..
+            } => {
+                *position += elapsed.as_secs_f64();
+                if *position == duration.as_secs_f64() {
+                    *position = 0_f64;
+                    Some(Update::EndOfStream)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    //pub fn new() -> Result<Self, AnyError> {}
+    pub fn from_path(path: &Path) -> Result<Self, AnyError> {
+        if let Some(extention) = path.to_path_buf().extension() {
+            println!("extention: {extention:?}");
+            match extention.to_str() {
+                Some("gif") => {
+                    let bytes = try_read_bytes(path)?;
+                    let frames = gif::Frames::from_bytes(bytes.clone())?;
+                    let duration = gif::Frames::from_bytes_with_length(bytes)?;
+                    println!("duration: {duration:?}");
+                    let position = 0_f64;
+                    Ok(Self::Gif {
+                        frames,
+                        duration,
+                        position,
+                    })
+                }
+                None => anyhow::bail!("failed to parse {extention:?}"),
+                ext => anyhow::bail!("ext not supported, {ext:?}"),
+            }
+        } else {
+            Err(anyhow!("didn't get to make extention"))
+        }
+    }
+}
+pub enum Update {
+    EndOfStream,
 }
 
-//pub trait ImageVid {
-//    fn from_bytes_with_length(bytes: Vec<u8>) -> Result<(Self, Duration)>;
-//}
-//
-//impl ImageVid for gif::Frames {
-//    fn from_bytes_with_length(bytes: Vec<u8>) -> Result<(Self, Duration)> {
-//        let decoder = Decoder::new(io::Cursor::new(bytes))?;
-//
-//        let total_bytes = decoder.total_bytes();
-//        let mut duration = Duration::default();
-//
-//        let frames = decoder
-//            .into_frames()
-//            .into_iter()
-//            .map(|result| {
-//                result
-//                    .inspect(|frame| duration += frame.delay())
-//                    .map(|frame| frame.into())
-//            })
-//            .collect::<Result<Vec<_>, _>>()?;
-//
-//        let first = frames.first().cloned().unwrap();
-//
-//        Ok((
-//            Frames {
-//                total_bytes,
-//                first,
-//                frames,
-//            },
-//            duration,
-//        ))
-//    }
-//}
+pub trait ImageVid {
+    fn from_bytes_with_length(bytes: Vec<u8>) -> Result<Duration, AnyError>;
+}
+
+impl ImageVid for gif::Frames {
+    fn from_bytes_with_length(bytes: Vec<u8>) -> Result<Duration, AnyError> {
+        let decoder = GifDecoder::new(std::io::Cursor::new(bytes.clone()))?;
+
+        let duration = decoder
+            .into_frames()
+            .into_iter()
+            .flatten()
+            .inspect(|frame| println!("delay: {:?}", frame.delay()))
+            .fold(Duration::default(), |acc, frame| acc + frame.delay().into());
+
+        Ok(duration)
+    }
+}
+impl ImageVid for webp::Frames {
+    fn from_bytes_with_length(bytes: Vec<u8>) -> Result<Duration, AnyError> {
+        let decoder = WebPDecoder::new(std::io::Cursor::new(bytes.clone()))?;
+
+        let duration = decoder
+            .into_frames()
+            .into_iter()
+            .flatten()
+            .fold(Duration::default(), |acc, frame| acc + frame.delay().into());
+
+        Ok(duration)
+    }
+}

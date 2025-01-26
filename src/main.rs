@@ -1,8 +1,12 @@
 use iced::{
+    advanced::graphics::futures::subscription,
     widget::{button, column, row, text},
-    Element,
+    Element, Subscription,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 use video_sort_gui::file_handling::{self, build_paths};
 
 fn main() -> iced::Result {
@@ -17,12 +21,14 @@ struct App {
     selected_action: Option<usize>,
     selected_area: Option<usize>,
     data: Data,
+    last_tick: Instant,
 }
 
 #[derive(Clone, Debug)]
 enum Message {
     ActionInput(String),
     AreaInput(String),
+    Tick(Instant),
 }
 
 impl Default for App {
@@ -31,13 +37,15 @@ impl Default for App {
         let actions = vec!["push".into(), "pull".into(), "exit".into()];
         let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
         build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
+        let last_tick = Instant::now();
 
         Self {
             path: data.next_path().unwrap(),
-            actions,
-            areas,
             selected_action: None,
             selected_area: None,
+            last_tick,
+            actions,
+            areas,
             data,
         }
     }
@@ -63,6 +71,10 @@ impl App {
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
                 self.after_button_press();
+            }
+            Message::Tick(instant) => {
+                let elapsed = instant - self.last_tick;
+                self.last_tick = instant;
             }
         }
     }
@@ -128,6 +140,10 @@ impl App {
                 )))
             })
             .into()
+    }
+    fn subscription(&self) -> Subscription<Message> {
+        let subscriptions = vec![iced::time::every(Duration::from_millis(1000)).map(Message::Tick)];
+        iced::Subscription::batch(subscriptions)
     }
 }
 #[derive(Debug, Clone)]
