@@ -77,11 +77,7 @@ impl App {
                 let elapsed = instant - self.last_tick;
                 self.last_tick = instant;
             }
-            Message::VideoEnd => {
-                if let Player::Video { finished, .. } = &mut self.player {
-                    *finished = true
-                }
-            }
+            Message::VideoEnd => {}
         }
     }
     fn after_button_press(&mut self) {
