@@ -1,6 +1,7 @@
 use iced::{
     widget::{button, column, container, row, text},
-    Element, Length, Size, Subscription, Task,
+    Alignment::Center,
+    Color, Element, Length, Size, Subscription, Task,
 };
 use iced_video_player::VideoPlayer;
 use std::{
@@ -20,6 +21,7 @@ fn main() -> iced::Result {
             size: Size::new(1098.0, 664.0),
             ..Default::default()
         })
+        .centered()
         //.run()
         .run_with(App::with_taks)
 }
@@ -27,7 +29,8 @@ use iced_gif::gif;
 use iced_webp::webp;
 
 struct App {
-    path: String,
+    path: PathBuf,
+    next_path: Option<PathBuf>,
     actions: Vec<String>,
     areas: Vec<String>,
     selected_action: Option<usize>,
@@ -35,6 +38,7 @@ struct App {
     data: Data,
     last_tick: Instant,
     player: Player,
+    play_buff: Player,
 }
 
 #[derive(Clone)]
@@ -53,17 +57,19 @@ impl Debug for Message {
 
 impl Default for App {
     fn default() -> Self {
-        let data = Data::default();
+        let mut data = Data::default();
         let actions = vec!["push".into(), "pull".into(), "exit".into()];
         let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
         build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
         let last_tick = Instant::now();
         let path = data.next_path().unwrap();
-        let player = Player::from_path(Path::new(&path)).expect("path is not good");
+        let player = Player::from_path(&path).expect("path is not good");
 
         Self {
             player,
+            play_buff: Player::Idle,
             path,
+            next_path: data.next_path(),
             selected_action: None,
             selected_area: None,
             last_tick,
@@ -76,19 +82,20 @@ impl Default for App {
 
 impl App {
     pub fn with_taks() -> (Self, Task<Message>) {
-        let data = Data::default();
+        let mut data = Data::default();
         let actions = vec!["push".into(), "pull".into(), "exit".into()];
         let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
         build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
         let last_tick = Instant::now();
         let path = data.next_path().unwrap();
-        let path2 = path.clone();
-        //let player = Player::from_path(pPath).expect("path is not good");
-
+        let next_path = data.next_path();
+        println!("Path: {path:?}, next_path: {next_path:?}");
         (
             Self {
+                path: path.clone(),
+                next_path,
                 player: Player::Idle,
-                path,
+                play_buff: Player::Idle,
                 selected_action: None,
                 selected_area: None,
                 last_tick,
@@ -96,7 +103,7 @@ impl App {
                 areas,
                 data,
             },
-            Player::from_path_async_naive(Path::new(&path2)).map(Message::Loaded),
+            Player::from_path_async_naive(&path).map(Message::Loaded),
         )
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -108,8 +115,19 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                if let Some(path) = self.after_button_press() {
-                    Player::from_path_async_naive(&path).map(Message::Loaded)
+                if let (true, Some(path)) = (self.after_button_press(), &self.next_path.clone()) {
+                    self.path = path.clone();
+                    self.next_path = self.data.next_path();
+                    if let Player::Idle = self.play_buff {
+                    } else {
+                        std::mem::swap(&mut self.player, &mut self.play_buff);
+                    }
+                    println!("sending button load request: {:?}", path);
+                    if let Some(p) = &self.next_path {
+                        Player::from_path_async_naive(&p).map(Message::Loaded)
+                    } else {
+                        Task::none()
+                    }
                 } else {
                     Task::none()
                 }
@@ -121,8 +139,19 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                if let Some(path) = self.after_button_press() {
-                    Player::from_path_async_naive(&path).map(Message::Loaded)
+                if let (true, Some(path)) = (self.after_button_press(), self.next_path.clone()) {
+                    self.path = path.clone();
+                    self.next_path = self.data.next_path();
+                    if let Player::Idle = self.play_buff {
+                    } else {
+                        std::mem::swap(&mut self.player, &mut self.play_buff);
+                    }
+                    println!("sending button load request: {:?}", path);
+                    if let Some(p) = &self.next_path {
+                        Player::from_path_async_naive(&p).map(Message::Loaded)
+                    } else {
+                        Task::none()
+                    }
                 } else {
                     Task::none()
                 }
@@ -133,21 +162,50 @@ impl App {
                 Task::none()
             }
             Message::VideoEnd => Task::none(),
-            Message::Loaded(player) => {
-                match player {
-                    Some(player) => self.player = player,
-                    None => println!("loading failed"),
-                }
-                Task::none()
-            }
+            Message::Loaded(player) => self.loading_handler(player),
         }
     }
-    fn after_button_press(&mut self) -> Option<PathBuf> {
+    fn loading_handler(&mut self, player: Option<Player>) -> Task<Message> {
+        println!("done loading!!!");
+        let p = match (player, &self.player) {
+            (None, _) => {
+                println!("loading failed");
+                Task::none()
+            }
+            (Some(vid), Player::Idle) => {
+                println!(
+                    "first loading! path: {:?}, next_path: {:?}",
+                    self.path, self.next_path
+                );
+                self.player = vid;
+                if let Some(path) = &self.next_path {
+                    println!("sending next load request, from first; path: {:?}", path);
+                    Player::from_path_async_naive(path).map(Message::Loaded)
+                } else {
+                    Task::none()
+                }
+            }
+            (Some(vid), _) => {
+                println!(
+                    "after first path: {:?}, next_path: {:?}",
+                    self.path, self.next_path
+                );
+                self.play_buff = vid;
+                Task::none()
+            }
+        };
+        println!(
+            "after loads vids are: player: {:?}, buffer: {:?}",
+            self.player, self.play_buff
+        );
+        p
+    }
+    fn after_button_press(&mut self) -> bool {
         if let (Some(selected_action), Some(selected_area)) = self.all_selected_str() {
             let selected_action = selected_action.to_string();
             let selected_area = selected_area.to_string();
             self.data.file_map.insert(
-                self.path.clone(),
+                self.path.to_str().unwrap().to_string(),
                 (selected_action.clone(), selected_area.clone()),
             );
 
@@ -155,16 +213,18 @@ impl App {
                 println!("copy failed: {e}");
             }
             self.reset_selected();
-            if let Some(path) = self.data.next_path() {
-                println!("has path!!! ");
-                self.path = path;
-                Some(PathBuf::from(&self.path))
-            } else {
-                println!("paths are finished");
-                None
-            }
+            true
         } else {
-            None
+            false
+        }
+    }
+    fn handle_next_path(&mut self) {
+        if let Some(path) = &self.next_path {
+            println!("has path!!! ");
+            self.path = path.to_owned();
+            self.next_path = self.data.next_path();
+        } else {
+            println!("paths are finished");
         }
     }
     fn all_selected_str(&self) -> (Option<&str>, Option<&str>) {
@@ -179,35 +239,54 @@ impl App {
     }
 
     pub fn view(&self) -> Element<Message> {
-        let row1 = self.actions.iter().fold(row(None), |acc, s| {
-            acc.push(button(text(s)).on_press(Message::ActionInput(s.into())))
-        });
-        let row2 = self.areas.iter().fold(row(None), |acc, s| {
-            acc.push(button(text(s)).on_press(Message::AreaInput(s.into())))
-        });
+        let row1 = self
+            .actions
+            .iter()
+            .fold(row(None), |acc, s| {
+                acc.push({
+                    let b = button(text(s)).on_press(Message::ActionInput(s.into()));
+                    match self.all_selected_str() {
+                        (Some(sel), _) if sel == s => {
+                            b.style(|theme, status| iced::widget::button::secondary(theme, status))
+                        }
+                        _ => b,
+                    }
+                })
+            })
+            .align_y(Center)
+            .padding(10)
+            .spacing(10);
+        let row2 = self
+            .areas
+            .iter()
+            .fold(row(None), |acc, s| {
+                acc.push({
+                    let b = button(text(s)).on_press(Message::AreaInput(s.into()));
+                    match self.all_selected_str() {
+                        (_, Some(sel)) if sel == s => {
+                            b.style(|theme, status| iced::widget::button::secondary(theme, status))
+                        }
+                        _ => b,
+                    }
+                })
+            })
+            .align_y(Center)
+            .padding(10)
+            .spacing(10);
+        let video = container(view_player(&self.player).explain(Color::from_rgb(1.0, 1.0, 1.0)))
+            .width(Length::Fill)
+            .height(Length::FillPortion(2));
 
         let col = column![
-            container(view_player(&self.player)).width(400).height(400),
             text(format!("current file is: {:?}", self.path,)),
-            text(format!(
-                "selected_action: {:?}, selected_area: {:?}",
-                self.selected_action, self.selected_area
-            )),
             text("actions"),
             row1,
             text("areas"),
             row2,
-            text("combinations"),
-        ];
-        self.data
-            .file_map
-            .iter()
-            .fold(col, |acc, (path, (action, area))| {
-                acc.push(text(format!(
-                    "path: {path}, action: {action}, area: {area}"
-                )))
-            })
-            .into()
+        ]
+        .width(Length::Fill)
+        .height(Length::FillPortion(1));
+        column![video, col].into()
     }
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![iced::time::every(Duration::from_millis(1000)).map(Message::Tick)];
@@ -237,6 +316,7 @@ fn view_player(player: &Player) -> Element<Message> {
 #[derive(Debug, Clone)]
 struct Data {
     file_paths: Vec<String>,
+    index: usize,
     file_map: HashMap<String, (String, String)>,
 }
 impl Data {
@@ -244,13 +324,17 @@ impl Data {
         let file_paths = file_handling::get_file_names_in_dir(path).unwrap();
         Ok(Self {
             file_paths,
+            index: 0,
             file_map: HashMap::default(),
         })
     }
-    pub fn next_path(&self) -> Option<String> {
-        let size = self.file_map.len();
-        println!("file_paths {:?}", self.file_paths);
-        self.file_paths.get(size).map(|s| s.into())
+    pub fn next_path(&mut self) -> Option<PathBuf> {
+        //let size = self.file_map.len();
+        //println!("file_paths {:?}", self.file_paths);
+        self.index += 1;
+        self.file_paths
+            .get(self.index - 1)
+            .map(|s| PathBuf::from(s))
     }
 }
 impl Default for Data {

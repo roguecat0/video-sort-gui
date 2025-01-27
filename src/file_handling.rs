@@ -28,12 +28,12 @@ pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) 
         }
     }
 }
-pub fn copy(picked_dirs: &Vec<String>, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = PathBuf::from(file_path);
+pub fn copy(picked_dirs: &Vec<String>, file_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let file_path = file_path.to_owned();
     let mut new_path = PathBuf::from(SORTED);
     new_path.push(PathBuf::from_iter(picked_dirs.iter()));
     new_path.push(path_to_filename(&file_path));
-    println!("old: {file_path:?}, new: {new_path:?}");
+    //println!("old: {file_path:?}, new: {new_path:?}");
     fs::copy(file_path, new_path)?;
     Ok(())
 }

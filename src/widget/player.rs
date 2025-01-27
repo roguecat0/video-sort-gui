@@ -6,6 +6,7 @@ use iced_webp::webp;
 use image_rs::codecs::gif::GifDecoder;
 use image_rs::codecs::webp::WebPDecoder;
 use image_rs::AnimationDecoder;
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -29,6 +30,21 @@ pub enum Player {
 impl Clone for Player {
     fn clone(&self) -> Self {
         Self::Idle
+    }
+}
+impl Debug for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Player")
+            .field(
+                "type",
+                match self {
+                    Self::Idle => &"Idle",
+                    Self::Gif { .. } => &"Gif",
+                    Self::Webp { .. } => &"Webp",
+                    Self::Video { .. } => &"Video",
+                },
+            )
+            .finish()
     }
 }
 fn try_read_bytes(path: &Path) -> Result<Vec<u8>, AnyError> {
@@ -78,7 +94,7 @@ impl Player {
 
     pub fn from_path(path: &Path) -> Result<Self, AnyError> {
         if let Some(extention) = path.to_path_buf().extension() {
-            println!("extention: {extention:?}");
+            //println!("extention: {extention:?}");
             match extention.to_str() {
                 Some("gif") => {
                     let bytes = try_read_bytes(path)?;
@@ -95,7 +111,7 @@ impl Player {
                     let bytes = try_read_bytes(path)?;
                     let frames = webp::Frames::from_bytes(bytes.clone())?;
                     let duration = webp::Frames::from_bytes_with_length(bytes)?;
-                    println!("duration: {duration:?}");
+                    //println!("duration: {duration:?}");
                     let position = 0_f64;
                     Ok(Self::Webp {
                         frames,
@@ -108,7 +124,7 @@ impl Player {
                         path.to_path_buf()
                     } else {
                         let path = path.canonicalize()?;
-                        println!("making relative: {path:?}");
+                        //println!("making relative: {path:?}");
                         path
                     };
 
@@ -146,7 +162,7 @@ impl ImageVid for gif::Frames {
             .into_frames()
             .into_iter()
             .flatten()
-            .inspect(|frame| println!("delay: {:?}", frame.delay()))
+            //.inspect(|frame| println!("delay: {:?}", frame.delay()))
             .fold(Duration::default(), |acc, frame| acc + frame.delay().into());
 
         Ok(duration)
