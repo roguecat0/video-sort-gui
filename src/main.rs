@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, text},
+    widget::{button, column, container, row, text, Button, Row},
     Alignment::Center,
     Color, Element, Length, Size, Subscription, Task,
 };
@@ -140,6 +140,7 @@ impl App {
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
                 if let (true, Some(path)) = (self.after_button_press(), self.next_path.clone()) {
+                    println!("both are pressed");
                     self.path = path.clone();
                     self.next_path = self.data.next_path();
                     if let Player::Idle = self.play_buff {
@@ -237,21 +238,31 @@ impl App {
         self.selected_area = None;
         self.selected_action = None;
     }
+    fn create_button(&self, s: &str, action: bool) -> Button<Message> {
+        let message = if action {
+            Message::ActionInput(s.into())
+        } else {
+            Message::AreaInput(s.into())
+        };
+        let b = button(text(s.to_string())).on_press(message);
+        match self.all_selected_str() {
+            (Some(sel), _) if sel == s && action => {
+                b.style(|theme, status| iced::widget::button::secondary(theme, status))
+            }
+            (_, Some(sel)) if sel == s && !action => {
+                b.style(|theme, status| iced::widget::button::secondary(theme, status))
+            }
+            _ => b,
+        }
+    }
 
     pub fn view(&self) -> Element<Message> {
-        let row1 = self
+        let clr = Color::from_rgb(1.0, 1.0, 1.0);
+        let row1: Row<Message> = self
             .actions
             .iter()
-            .fold(row(None), |acc, s| {
-                acc.push({
-                    let b = button(text(s)).on_press(Message::ActionInput(s.into()));
-                    match self.all_selected_str() {
-                        (Some(sel), _) if sel == s => {
-                            b.style(|theme, status| iced::widget::button::secondary(theme, status))
-                        }
-                        _ => b,
-                    }
-                })
+            .fold(row(None), |acc: Row<Message>, s: &String| {
+                acc.push(self.create_button(s, true))
             })
             .align_y(Center)
             .padding(10)
@@ -259,17 +270,7 @@ impl App {
         let row2 = self
             .areas
             .iter()
-            .fold(row(None), |acc, s| {
-                acc.push({
-                    let b = button(text(s)).on_press(Message::AreaInput(s.into()));
-                    match self.all_selected_str() {
-                        (_, Some(sel)) if sel == s => {
-                            b.style(|theme, status| iced::widget::button::secondary(theme, status))
-                        }
-                        _ => b,
-                    }
-                })
-            })
+            .fold(row(None), |acc, s| acc.push(self.create_button(s, false)))
             .align_y(Center)
             .padding(10)
             .spacing(10);
@@ -277,7 +278,7 @@ impl App {
             .width(Length::Fill)
             .height(Length::FillPortion(2));
 
-        let col = column![
+        let col: Element<Message> = column![
             text(format!("current file is: {:?}", self.path,)),
             text("actions"),
             row1,
@@ -285,8 +286,9 @@ impl App {
             row2,
         ]
         .width(Length::Fill)
-        .height(Length::FillPortion(1));
-        column![video, col].into()
+        .height(Length::FillPortion(1))
+        .into();
+        Element::from(column![video, col]).explain(clr)
     }
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![iced::time::every(Duration::from_millis(1000)).map(Message::Tick)];
