@@ -1,19 +1,28 @@
 use super::file_handling;
-use rusqlite;
-use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    path::{Path, PathBuf},
+};
 #[derive(Debug)]
+
 pub struct Data {
     file_paths: Vec<String>,
     index: usize,
     pub file_map: HashMap<String, (String, String)>,
-    pub conn: rusqlite::Connection,
 }
+type GenResult<T> = Result<T, Box<dyn std::error::Error>>;
 impl Data {
-    pub fn new(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let file_paths = file_handling::get_file_names_in_dir(path).unwrap();
-        let conn = rusqlite::Connection::open_in_memory()?;
+    pub fn new(path: &str) -> GenResult<Self> {
+        let file_paths = file_handling::get_file_names_in_dir(path)?
+            .into_iter()
+            .filter(|s| {
+                !file_handling::is_file_in_dir(Path::new(file_handling::SORTED), &s)
+                    .expect("path checking broke")
+            })
+            .collect::<Vec<_>>();
+
         Ok(Self {
-            conn,
             file_paths,
             index: 0,
             file_map: HashMap::default(),

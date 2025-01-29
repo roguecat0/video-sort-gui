@@ -3,7 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 const ROOT: &'static str = "src";
-const SORTED: &'static str = "sorted";
+pub const SORTED: &'static str = "sorted";
 pub const MEDIA: &'static str = "media";
 
 pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) {
@@ -32,7 +32,6 @@ pub fn copy(picked_dirs: &Vec<String>, file_path: &Path) -> Result<(), Box<dyn s
     let mut new_path = PathBuf::from(SORTED);
     new_path.push(PathBuf::from_iter(picked_dirs.iter()));
     new_path.push(path_to_filename(&file_path));
-    //println!("old: {file_path:?}, new: {new_path:?}");
     fs::copy(file_path, new_path)?;
     Ok(())
 }
@@ -43,6 +42,27 @@ fn path_to_filename(old_path: &Path) -> String {
         .flat_map(|s| s.to_str().map(|ss| ss.to_string()))
         .reduce(|acc, s| acc + "_" + &s)
         .unwrap()
+}
+pub fn is_file_in_dir(dir: &Path, filename: &str) -> io::Result<bool> {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let p = path.is_file().then(|| path.file_name()).flatten();
+            match p.map(|f| f.to_str()) {
+                Some(Some(file)) if file == &path_to_filename(Path::new(filename)) => {
+                    return Ok(true);
+                }
+                Some(Some(file)) => {}
+                Some(None) => println!("path: {path:?} is file but doesn't parst OSstr to &str"),
+                None => match is_file_in_dir(&path, filename) {
+                    Ok(true) => return Ok(true),
+                    _ => {}
+                },
+            }
+        }
+    }
+    Ok(false)
 }
 
 pub fn get_file_names_in_dir(path: &str) -> io::Result<Vec<String>> {
