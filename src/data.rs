@@ -7,8 +7,8 @@ use std::{
 #[derive(Debug)]
 
 pub struct Data {
-    file_paths: Vec<String>,
-    index: usize,
+    pub file_paths: Vec<String>,
+    pub index: usize,
     pub file_map: HashMap<String, (String, String)>,
 }
 type GenResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -35,6 +35,9 @@ impl Data {
         self.file_paths
             .get(self.index - 1)
             .map(|s| PathBuf::from(s))
+    }
+    pub fn has_next(&self) -> bool {
+        self.file_paths.get(self.index).is_some()
     }
 }
 impl Default for Data {

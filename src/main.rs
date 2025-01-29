@@ -92,7 +92,6 @@ impl App {
         let last_tick = Instant::now();
         let path = data.next_path().expect("no unsorted videos left");
         let next_path = data.next_path();
-        //println!("Path: {path:?}, next_path: {next_path:?}");
         (
             Self {
                 path: path.clone(),
@@ -147,14 +146,12 @@ impl App {
     }
     fn total_after_press(&mut self) -> Task<Message> {
         if let (true, Some(path)) = (self.after_button_press(), self.next_path.clone()) {
-            //println!("both are pressed");
             self.path = path.clone();
             self.next_path = self.data.next_path();
             if let Player::Idle = self.play_buff {
             } else {
                 std::mem::swap(&mut self.player, &mut self.play_buff);
             }
-            //println!("sending button load request: {:?}", path);
             if let Some(p) = &self.next_path {
                 Player::from_path_async_naive(&p).map(Message::Loaded)
             } else {
@@ -170,47 +167,24 @@ impl App {
         } else {
             self.selected_area = self.areas.get(d as usize).map(|_| d as usize);
         }
-        //self.selected_action = self
-        //    .actions
-        //    .iter()
-        //    .enumerate()
-        //    .find(|(_, ss)| &&s == ss)
-        //    .map(|e| e.0);
     }
 
     fn loading_handler(&mut self, player: Option<Player>) -> Task<Message> {
-        //println!("done loading!!!");
         let p = match (player, &self.player) {
-            (None, _) => {
-                //println!("loading failed");
-                Task::none()
-            }
+            (None, _) => Task::none(),
             (Some(vid), Player::Idle) => {
-                //println!(
-                //    "first loading! path: {:?}, next_path: {:?}",
-                //    self.path, self.next_path
-                //);
                 self.player = vid;
                 if let Some(path) = &self.next_path {
-                    //println!("sending next load request, from first; path: {:?}", path);
                     Player::from_path_async_naive(path).map(Message::Loaded)
                 } else {
                     Task::none()
                 }
             }
             (Some(vid), _) => {
-                //println!(
-                //    "after first path: {:?}, next_path: {:?}",
-                //    self.path, self.next_path
-                //);
                 self.play_buff = vid;
                 Task::none()
             }
         };
-        //println!(
-        //    "after loads vids are: player: {:?}, buffer: {:?}",
-        //    self.player, self.play_buff
-        //);
         p
     }
     fn after_button_press(&mut self) -> bool {
@@ -222,10 +196,18 @@ impl App {
                 (selected_action.clone(), selected_area.clone()),
             );
 
+            println!(
+                "data: {:?}, index: {}",
+                self.data.file_paths, self.data.index
+            );
             if let Err(e) = file_handling::copy(&vec![selected_action, selected_area], &self.path) {
                 println!("copy failed: {e}");
             }
             self.reset_selected();
+            if self.data.file_paths.len() + 1 <= self.data.index {
+                println!("paths are finished");
+                panic!("no more paths no more fun");
+            }
             true
         } else {
             false
@@ -233,11 +215,9 @@ impl App {
     }
     fn handle_next_path(&mut self) {
         if let Some(path) = &self.next_path {
-            //println!("has path!!! ");
             self.path = path.to_owned();
             self.next_path = self.data.next_path();
         } else {
-            //println!("paths are finished");
         }
     }
     fn all_selected_str(&self) -> (Option<&str>, Option<&str>) {

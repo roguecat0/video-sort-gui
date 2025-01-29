@@ -8,17 +8,26 @@ pub const MEDIA: &'static str = "media";
 
 pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) {
     if indexes.len() == recursive_dirs.len() {
-        let path =
-            recursive_dirs
+        //let path =
+        //    recursive_dirs
+        //        .iter()
+        //        .enumerate()
+        //        .fold(PathBuf::from(SORTED), |acc, (i, dir)| {
+        //            let mut acc = acc;
+        //            let s: String = dir[indexes[i]].clone();
+        //            acc.push(s);
+        //            acc
+        //        });
+        let picked = picked_dirs_to_folder(
+            &recursive_dirs
                 .iter()
                 .enumerate()
-                .fold(PathBuf::from(SORTED), |acc, (i, dir)| {
-                    let mut acc = acc;
-                    let s: String = dir[indexes[i]].clone();
-                    acc.push(s);
-                    acc
-                });
-        let err = fs::DirBuilder::new().recursive(true).create(&path);
+                .map(|(i, v)| v[indexes[i]].as_str())
+                .collect::<Vec<&str>>(),
+        );
+        let mut dir = PathBuf::from(SORTED);
+        dir.push(picked);
+        let err = fs::DirBuilder::new().recursive(true).create(&dir);
     } else {
         for i in 0..recursive_dirs[indexes.len()].len() {
             indexes.push(i);
@@ -27,10 +36,27 @@ pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) 
         }
     }
 }
+fn picked_dirs_to_folder(picked_dirs: &[&str]) -> String {
+    picked_dirs
+        .to_owned()
+        .into_iter()
+        .fold(String::new(), |acc, s| {
+            if acc == "" {
+                acc + s
+            } else {
+                acc + "_" + s
+            }
+        })
+}
 pub fn copy(picked_dirs: &Vec<String>, file_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = file_path.to_owned();
     let mut new_path = PathBuf::from(SORTED);
-    new_path.push(PathBuf::from_iter(picked_dirs.iter()));
+    new_path.push(picked_dirs_to_folder(
+        &picked_dirs
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<&str>>(),
+    ));
     new_path.push(path_to_filename(&file_path));
     fs::copy(file_path, new_path)?;
     Ok(())
