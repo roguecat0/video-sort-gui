@@ -23,6 +23,7 @@ fn main() -> iced::Result {
             ..Default::default()
         })
         .centered()
+        .subscription(App::subscription)
         //.run()
         .run_with(App::with_taks)
 }
@@ -49,6 +50,7 @@ enum Message {
     Tick(Instant),
     VideoEnd,
     Loaded(Option<Player>),
+    KeyboardDigit(u32),
 }
 impl Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -116,22 +118,7 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                if let (true, Some(path)) = (self.after_button_press(), &self.next_path.clone()) {
-                    self.path = path.clone();
-                    self.next_path = self.data.next_path();
-                    if let Player::Idle = self.play_buff {
-                    } else {
-                        std::mem::swap(&mut self.player, &mut self.play_buff);
-                    }
-                    println!("sending button load request: {:?}", path);
-                    if let Some(p) = &self.next_path {
-                        Player::from_path_async_naive(&p).map(Message::Loaded)
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    Task::none()
-                }
+                self.total_after_press()
             }
             Message::AreaInput(s) => {
                 self.selected_area = self
@@ -140,23 +127,7 @@ impl App {
                     .enumerate()
                     .find(|(_, ss)| &&s == ss)
                     .map(|e| e.0);
-                if let (true, Some(path)) = (self.after_button_press(), self.next_path.clone()) {
-                    println!("both are pressed");
-                    self.path = path.clone();
-                    self.next_path = self.data.next_path();
-                    if let Player::Idle = self.play_buff {
-                    } else {
-                        std::mem::swap(&mut self.player, &mut self.play_buff);
-                    }
-                    println!("sending button load request: {:?}", path);
-                    if let Some(p) = &self.next_path {
-                        Player::from_path_async_naive(&p).map(Message::Loaded)
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    Task::none()
-                }
+                self.total_after_press()
             }
             Message::Tick(instant) => {
                 let elapsed = instant - self.last_tick;
@@ -165,8 +136,48 @@ impl App {
             }
             Message::VideoEnd => Task::none(),
             Message::Loaded(player) => self.loading_handler(player),
+            Message::KeyboardDigit(d) => match d {
+                1..=9 => {
+                    self.keyboard_map_button(d - 1);
+                    self.total_after_press()
+                }
+                _ => Task::none(),
+            },
         }
     }
+    fn total_after_press(&mut self) -> Task<Message> {
+        if let (true, Some(path)) = (self.after_button_press(), self.next_path.clone()) {
+            println!("both are pressed");
+            self.path = path.clone();
+            self.next_path = self.data.next_path();
+            if let Player::Idle = self.play_buff {
+            } else {
+                std::mem::swap(&mut self.player, &mut self.play_buff);
+            }
+            println!("sending button load request: {:?}", path);
+            if let Some(p) = &self.next_path {
+                Player::from_path_async_naive(&p).map(Message::Loaded)
+            } else {
+                Task::none()
+            }
+        } else {
+            Task::none()
+        }
+    }
+    fn keyboard_map_button(&mut self, d: u32) {
+        if None == self.selected_action {
+            self.selected_action = self.actions.get(d as usize).map(|_| d as usize);
+        } else {
+            self.selected_area = self.areas.get(d as usize).map(|_| d as usize);
+        }
+        //self.selected_action = self
+        //    .actions
+        //    .iter()
+        //    .enumerate()
+        //    .find(|(_, ss)| &&s == ss)
+        //    .map(|e| e.0);
+    }
+
     fn loading_handler(&mut self, player: Option<Player>) -> Task<Message> {
         println!("done loading!!!");
         let p = match (player, &self.player) {
@@ -292,7 +303,25 @@ impl App {
         Element::from(column![video, col]).explain(clr)
     }
     fn subscription(&self) -> Subscription<Message> {
-        let subscriptions = vec![iced::time::every(Duration::from_millis(1000)).map(Message::Tick)];
+        use iced::keyboard;
+
+        let keyboard_sub = keyboard::on_key_press(|key, _| {
+            if let keyboard::Key::Character(key) = key {
+                println!("key: {key:?}");
+                key.as_str()
+                    .chars()
+                    .next()
+                    .and_then(|c| c.to_digit(10))
+                    .map(Message::KeyboardDigit)
+            } else {
+                None
+            }
+        });
+
+        let subscriptions = vec![
+            iced::time::every(Duration::from_millis(1000)).map(Message::Tick),
+            keyboard_sub,
+        ];
         iced::Subscription::batch(subscriptions)
     }
 }
