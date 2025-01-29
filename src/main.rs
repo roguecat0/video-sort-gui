@@ -1,5 +1,6 @@
 use iced::{
     widget::{button, column, container, row, text, Button, Row},
+    window,
     Alignment::Center,
     Color, Element, Length, Size, Subscription, Task,
 };
@@ -51,6 +52,7 @@ enum Message {
     VideoEnd,
     Loaded(Option<Player>),
     KeyboardDigit(u32),
+    WindowId(Option<window::Id>),
 }
 impl Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,6 +94,7 @@ impl App {
         let last_tick = Instant::now();
         let path = data.next_path().expect("no unsorted videos left");
         let next_path = data.next_path();
+        let f = Player::from_path_async_naive(&path).map(Message::Loaded);
         (
             Self {
                 path: path.clone(),
@@ -105,7 +108,7 @@ impl App {
                 areas,
                 data,
             },
-            Player::from_path_async_naive(&path).map(Message::Loaded),
+            Task::batch(vec![f, iced::window::get_latest().map(Message::WindowId)]),
         )
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -142,6 +145,11 @@ impl App {
                 }
                 _ => Task::none(),
             },
+            Message::WindowId(Some(id)) => window::maximize(id, true),
+            Message::WindowId(None) => {
+                println!("win id not found :/");
+                Task::none()
+            }
         }
     }
     fn total_after_press(&mut self) -> Task<Message> {
