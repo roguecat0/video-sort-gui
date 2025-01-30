@@ -119,7 +119,8 @@ impl Player {
                         position,
                     })
                 }
-                Some("mp4") | Some("webm") => {
+                Some("mp4") | Some("webm") | Some("mpeg") | Some("quicktime") | Some("mov")
+                | Some("avi") | Some("mkv") => {
                     let path = if path.is_absolute() {
                         path.to_path_buf()
                     } else {
