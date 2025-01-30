@@ -25,7 +25,6 @@ fn main() -> iced::Result {
         })
         .centered()
         .subscription(App::subscription)
-        //.run()
         .run_with(App::with_taks)
 }
 use iced_gif::gif;
@@ -88,8 +87,20 @@ impl Default for App {
 impl App {
     pub fn with_taks() -> (Self, Task<Message>) {
         let mut data = Data::default();
-        let actions = vec!["push".into(), "pull".into(), "exit".into()];
-        let areas = vec!["stairs".into(), "pc".into(), "kitchen".into()];
+        let categories = file_handling::get_categories(file_handling::CAT_FILE);
+        let mut categories = match categories {
+            //this also works !!
+            //Ok(n) => std::convert::Into::<std::collections::VecDeque<Vec<String>>>::into(n),
+            Ok(n) => std::collections::VecDeque::from(n),
+            Err(e) => panic!("could read {}, e: {e:?}", file_handling::CAT_FILE),
+        };
+
+        let actions = categories
+            .pop_front()
+            .expect("needs first row of categories");
+        let areas = categories
+            .pop_front()
+            .expect("needs second row of categories");
         build_paths(&vec![actions.clone(), areas.clone()], &mut vec![]);
         let last_tick = Instant::now();
         let path = data.next_path().expect("no unsorted videos left");

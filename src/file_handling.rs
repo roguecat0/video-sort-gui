@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 const ROOT: &'static str = "src";
 pub const SORTED: &'static str = "sorted";
 pub const MEDIA: &'static str = "media";
+pub const CAT_FILE: &'static str = "sort_categories.txt";
 
 pub fn build_paths(recursive_dirs: &Vec<Vec<String>>, indexes: &mut Vec<usize>) {
     if indexes.len() == recursive_dirs.len() {
@@ -47,6 +48,13 @@ fn picked_dirs_to_folder(picked_dirs: &[&str]) -> String {
                 acc + "_" + s
             }
         })
+}
+pub fn get_categories(path: impl AsRef<Path>) -> io::Result<Vec<Vec<String>>> {
+    let out = std::fs::read_to_string(path)?
+        .lines()
+        .map(|l| l.split(',').map(|w| w.to_string()).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    Ok(out)
 }
 pub fn copy(picked_dirs: &Vec<String>, file_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = file_path.to_owned();
