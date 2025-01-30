@@ -211,7 +211,18 @@ impl App {
                         .expect("there to be a path that failed to load")
                 };
                 print!("failed to load file: {file_path:?}");
-                Task::none()
+
+                self.path = self
+                    .next_path
+                    .clone()
+                    .expect("if no next path prepare to crash");
+                self.next_path = self.data.next_path();
+
+                if let Some(path) = &self.next_path {
+                    Player::from_path_async_naive(path).map(Message::Loaded)
+                } else {
+                    Task::none()
+                }
             }
             (Some(vid), Player::Idle) => {
                 self.player = vid;
