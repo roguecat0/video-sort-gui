@@ -201,7 +201,18 @@ impl App {
 
     fn loading_handler(&mut self, player: Option<Player>) -> Task<Message> {
         let p = match (player, &self.player) {
-            (None, _) => Task::none(),
+            (None, _) => {
+                let file_path = if let Player::Idle = self.player {
+                    &self.path
+                } else {
+                    &self
+                        .next_path
+                        .clone()
+                        .expect("there to be a path that failed to load")
+                };
+                print!("failed to load file: {file_path:?}");
+                Task::none()
+            }
             (Some(vid), Player::Idle) => {
                 self.player = vid;
                 if let Some(path) = &self.next_path {
