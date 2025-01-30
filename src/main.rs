@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, text, Button, Row},
+    widget::{button, column, container, row, text, Button, Row, Text},
     window,
     Alignment::Center,
     Color, Element, Length, Size, Subscription, Task,
@@ -111,6 +111,28 @@ impl App {
             Task::batch(vec![f, iced::window::get_latest().map(Message::WindowId)]),
         )
     }
+    fn subscription(&self) -> Subscription<Message> {
+        use iced::keyboard;
+
+        let keyboard_sub = keyboard::on_key_press(|key, _| {
+            if let keyboard::Key::Character(key) = key {
+                //println!("key: {key:?}");
+                key.as_str()
+                    .chars()
+                    .next()
+                    .and_then(|c| c.to_digit(10))
+                    .map(Message::KeyboardDigit)
+            } else {
+                None
+            }
+        });
+
+        let subscriptions = vec![
+            iced::time::every(Duration::from_millis(1000)).map(Message::Tick),
+            keyboard_sub,
+        ];
+        iced::Subscription::batch(subscriptions)
+    }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ActionInput(s) => {
@@ -221,13 +243,6 @@ impl App {
             false
         }
     }
-    fn handle_next_path(&mut self) {
-        if let Some(path) = &self.next_path {
-            self.path = path.to_owned();
-            self.next_path = self.data.next_path();
-        } else {
-        }
-    }
     fn all_selected_str(&self) -> (Option<&str>, Option<&str>) {
         (
             self.selected_action.map(|a| self.actions[a].as_str()),
@@ -238,13 +253,15 @@ impl App {
         self.selected_area = None;
         self.selected_action = None;
     }
-    fn create_button(&self, s: &str, action: bool) -> Button<Message> {
+    fn create_button(&self, s: &str, action: bool, i: usize) -> Button<Message> {
         let message = if action {
             Message::ActionInput(s.into())
         } else {
             Message::AreaInput(s.into())
         };
-        let b = button(text(s.to_string())).on_press(message);
+        let b = button(container(text(format!("{s}: ({i})")).size(16)).center(Length::Fill))
+            .on_press(message)
+            .width(200);
         match self.all_selected_str() {
             (Some(sel), _) if sel == s && action => {
                 b.style(|theme, status| iced::widget::button::secondary(theme, status))
@@ -258,59 +275,46 @@ impl App {
 
     pub fn view(&self) -> Element<Message> {
         let clr = Color::from_rgb(1.0, 1.0, 1.0);
+        let sub_head_clr = Color::parse("#8a9091").unwrap();
+        let action_text: Text = text("Actions: ").size(20).center();
+        let area_text: Text = text("Areas: ").size(20).center();
         let row1: Row<Message> = self
             .actions
             .iter()
-            .fold(row(None), |acc: Row<Message>, s: &String| {
-                acc.push(self.create_button(s, true))
-            })
+            .enumerate()
+            .fold(
+                row![action_text],
+                |acc: Row<Message>, (i, s): (usize, &String)| {
+                    acc.push(self.create_button(s, true, i))
+                },
+            )
             .align_y(Center)
             .padding(10)
             .spacing(10);
         let row2 = self
             .areas
             .iter()
-            .fold(row(None), |acc, s| acc.push(self.create_button(s, false)))
+            .enumerate()
+            .fold(row![area_text], |acc, (i, s)| {
+                acc.push(self.create_button(s, false, i))
+            })
             .align_y(Center)
             .padding(10)
             .spacing(10);
-        let video = container(view_player(&self.player).explain(Color::from_rgb(1.0, 1.0, 1.0)))
+        let video = container(view_player(&self.player))
             .width(Length::Fill)
-            .height(Length::FillPortion(2));
+            .height(Length::FillPortion(3));
 
         let col: Element<Message> = column![
-            text(format!("current file is: {:?}", self.path,)),
-            text("actions"),
+            text(format!("current file is: {:?}", self.path,)).color(sub_head_clr),
             row1,
-            text("areas"),
             row2,
         ]
-        .width(Length::Fill)
-        .height(Length::FillPortion(1))
+        .align_x(Center)
+        .spacing(12)
         .into();
-        Element::from(column![video, col]).explain(clr)
-    }
-    fn subscription(&self) -> Subscription<Message> {
-        use iced::keyboard;
-
-        let keyboard_sub = keyboard::on_key_press(|key, _| {
-            if let keyboard::Key::Character(key) = key {
-                //println!("key: {key:?}");
-                key.as_str()
-                    .chars()
-                    .next()
-                    .and_then(|c| c.to_digit(10))
-                    .map(Message::KeyboardDigit)
-            } else {
-                None
-            }
-        });
-
-        let subscriptions = vec![
-            iced::time::every(Duration::from_millis(1000)).map(Message::Tick),
-            keyboard_sub,
-        ];
-        iced::Subscription::batch(subscriptions)
+        let col = container(col).center(Length::Fill);
+        Element::from(column![video, col].spacing(10))
     }
 }
 fn view_player(player: &Player) -> Element<Message> {
