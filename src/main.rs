@@ -292,7 +292,7 @@ impl App {
         } else {
             Message::AreaInput(s.into())
         };
-        let b = button(container(text(format!("{s}: ({i})")).size(16)).center(Length::Fill))
+        let b = button(container(text(format!("{s}: ({})", i + 1)).size(16)).center(Length::Fill))
             .on_press(message)
             .width(200);
         match self.all_selected_str() {
